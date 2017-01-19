@@ -588,7 +588,7 @@ static void PrintVersionInformation(std::ostream& out) {
 
   // Print NodeReport version
   // e.g. NodeReport version: 1.0.6 (built against Node.js v6.9.1)
-  out << "\nNodeReport version: " << NODEREPORT_VERSION << "(built against Node.js v" << NODE_VERSION_STRING << ")\n";
+  out << "\nNodeReport version: " << NODEREPORT_VERSION << " (built against Node.js v" << NODE_VERSION_STRING << ")\n";
 
   // Print operating system and machine information (Windows)
 #ifdef _WIN32
@@ -663,7 +663,7 @@ static void PrintVersionInformation(std::ostream& out) {
   if (uname(&os_info) == 0) {
     out << "\nOS version: " << os_info.sysname << " " << os_info.release << " " << os_info.version << "\n";
 #if defined(__GLIBC__)
-    out << "(glibc: %d.%d)\n", __GLIBC__, __GLIBC_MINOR__;
+    out << "(glibc: "<< __GLIBC__ << "." << __GLIBC_MINOR__ << ")\n";
 #endif
     out <<  "\nMachine: " << os_info.nodename << " " << os_info.machine << "\n";
   }
