@@ -430,7 +430,7 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
 
   // Open the NodeReport file stream for writing. Supports stdout/err, user-specified or (default) generated name
   std::ofstream outfile;
-  std::ostream* outstream;
+  std::ostream* outstream = &std::cout;
   if (!strncmp(filename, "stdout", sizeof("stdout") - 1)) {
     outstream = &std::cout;
   } else if (!strncmp(filename, "stderr", sizeof("stderr") - 1)) {
