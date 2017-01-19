@@ -468,20 +468,25 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
   out << "Filename: " << filename << "\n";
 
   // Print dump event and module load date/time stamps
+  char timebuf[64];
 #ifdef _WIN32
-  out << "Dump event time:  %4d/%02d/%02d %02d:%02d:%02d\n",
+  snprintf(timebuf, sizeof(timebuf), "%4d/%02d/%02d %02d:%02d:%02d",
           tm_struct.wYear, tm_struct.wMonth, tm_struct.wDay,
           tm_struct.wHour, tm_struct.wMinute, tm_struct.wSecond);
-  out << "Module load time: %4d/%02d/%02d %02d:%02d:%02d\n",
+  out << "Dump event time:  "<< timebuf << "\n";
+  snprintf(timebuf, sizeof(timebuf), "%4d/%02d/%02d %02d:%02d:%02d",
           loadtime_tm_struct.wYear, loadtime_tm_struct.wMonth, loadtime_tm_struct.wDay,
           loadtime_tm_struct.wHour, loadtime_tm_struct.wMinute, loadtime_tm_struct.wSecond);
+  out << "Module load time: " << timebuf << "\n";
 #else  // UNIX, OSX
-  out << "Dump event time:  %4d/%02d/%02d %02d:%02d:%02d\n",
+  snprintf(timebuf, sizeof(timebuf), "%4d/%02d/%02d %02d:%02d:%02d",
           tm_struct.tm_year+1900, tm_struct.tm_mon+1, tm_struct.tm_mday,
           tm_struct.tm_hour, tm_struct.tm_min, tm_struct.tm_sec);
-  out << "Module load time: %4d/%02d/%02d %02d:%02d:%02d\n",
+  out << "Dump event time:  "<< timebuf << "\n";
+      snprintf(timebuf, sizeof(timebuf), "%4d/%02d/%02d %02d:%02d:%02d",
           loadtime_tm_struct.tm_year+1900, loadtime_tm_struct.tm_mon+1, loadtime_tm_struct.tm_mday,
           loadtime_tm_struct.tm_hour, loadtime_tm_struct.tm_min, loadtime_tm_struct.tm_sec);
+  out << "Module load time: " << timebuf << "\n";
 #endif
   // Print native process ID
   out << "Process ID: " << pid << std::endl;
@@ -730,12 +735,15 @@ static void PrintStackFrame(std::ostream& out, Isolate* isolate, Local<StackFram
   Nan::Utf8String script_name(frame->GetScriptName());
   const int line_number = frame->GetLineNumber();
   const int column = frame->GetColumn();
+  char buf[64];
 
   // First print the frame index and the instruction address
 #ifdef _WIN32
-  out << "%2d: [pc=0x%p] ", i, pc;
+  snprintf( buf, sizeof(buf), "%2d: [pc=0x%p] ", i, pc);
+  out << buf;
 #else
-  out << "%2d: [pc=%p] ", i, pc;
+  snprintf( buf, sizeof(buf), "%2d: [pc=%p] ", i, pc);
+  out << buf;
 #endif
 
   // Now print the JavaScript function name and source information
@@ -820,6 +828,7 @@ void PrintNativeStack(std::ostream& out) {
  ******************************************************************************/
 void PrintNativeStack(std::ostream& out) {
   void* frames[256];
+  char buf[64];
   out << "\n================================================================================";
   out << "\n==== Native Stack Trace ========================================================\n\n";
 
@@ -837,7 +846,8 @@ void PrintNativeStack(std::ostream& out) {
   // backtrace_symbols_fd(frames, size, fileno(fp));
   for (int i = 2; i < size; i++) {
     // print frame index and instruction address
-    out << "%2d: [pc=%p] ", i-2, frames[i];
+    snprintf(buf, sizeof(buf), "%2d: [pc=%p] ", i-2, frames[i]);
+    out << buf;
     // If we can translate the address using dladdr() print additional symbolic information
     Dl_info info;
     if (dladdr(frames[i], &info)) {
@@ -909,36 +919,45 @@ static void PrintGCStatistics(std::ostream& out, Isolate* isolate) {
  *
  ******************************************************************************/
 static void PrintResourceUsage(std::ostream& out) {
+  char buf[64];
   out << "\n================================================================================";
   out << "\n==== Resource Usage ============================================================\n";
 
   // Process and current thread usage statistics
   struct rusage stats;
-  out << "\nProcess total resource usage:");
+  out << "\nProcess total resource usage:";
   if (getrusage(RUSAGE_SELF, &stats) == 0) {
 #if defined(__APPLE__) || defined(_AIX)
-    out << "\n  User mode CPU: %ld.%06d secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec;
-    out << "\n  Kernel mode CPU: %ld.%06d secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec;
+    snprintf( buf, sizeof(buf), "%ld.%06d", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
+    out << "\n  User mode CPU: " << buf << " secs";
+    snprintf( buf, sizeof(buf), "%ld.%06d", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec);
+    out << "\n  Kernel mode CPU: " << buf << " secs";
 #else
-    out << "\n  User mode CPU: %ld.%06ld secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec;
-    out << "\n  Kernel mode CPU: %ld.%06ld secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec;
+    snprintf( buf, sizeof(buf), "%ld.%06ld", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
+    out << "\n  User mode CPU: " << buf << " secs";
+    snprintf( buf, sizeof(buf), "%ld.%06ld", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec);
+    out << "\n  Kernel mode CPU: " << buf << " secs";
 #endif
-    out << "\n  Maximum resident set size: ");
+    out << "\n  Maximum resident set size: ";
     WriteInteger(out, stats.ru_maxrss * 1024);
-    out << " bytes\n  Page faults: %ld (I/O required) %ld (no I/O required)", stats.ru_majflt, stats.ru_minflt;
-    out << "\n  Filesystem activity: %ld reads %ld writes", stats.ru_inblock, stats.ru_oublock);
+    out << " bytes\n  Page faults: " << stats.ru_majflt << " (I/O required) " << stats.ru_minflt << " (no I/O required)";
+    out << "\n  Filesystem activity: " << stats.ru_inblock << " reads " <<  stats.ru_oublock << " writes";
   }
 #ifdef RUSAGE_THREAD
   out << "\n\nEvent loop thread resource usage:";
   if (getrusage(RUSAGE_THREAD, &stats) == 0) {
 #if defined(__APPLE__) || defined(_AIX)
-    out << "\n  User mode CPU: %ld.%06d secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec;
-    out << "\n  Kernel mode CPU: %ld.%06d secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec;
+    snprintf( buf, sizeof(buf), "%ld.%06d", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
+    out << "\n  User mode CPU: " << buf << " secs";
+    snprintf( buf, sizeof(buf), "%ld.%06d", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec;
+    out << "\n  Kernel mode CPU: " << buf << " secs";
 #else
-    out << "\n  User mode CPU: %ld.%06ld secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec;
-    out << "\n  Kernel mode CPU: %ld.%06ld secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec;
+    snprintf( buf, sizeof(buf), "%ld.%06ld", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
+    out << "\n  User mode CPU: " << buf << " secs";
+    snprintf( buf, sizeof(buf), "%ld.%06ld", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec);
+    out << "\n  Kernel mode CPU: " << buf << " secs";
 #endif
-    out << "\n  Filesystem activity: %ld reads %ld writes", stats.ru_inblock, stats.ru_oublock;
+    out << "\n  Filesystem activity: " << stats.ru_inblock << " reads " << stats.ru_oublock << " writes";
   }
 #endif
   out << std::endl;
@@ -997,8 +1016,9 @@ const static struct {
   {"virtual memory (kbytes)       ", RLIMIT_AS}
 };
 
-  out << "\nResource limits                        soft limit      hard limit\n");
+  out << "\nResource limits                        soft limit      hard limit\n";
   struct rlimit limit;
+  char buf[64];
 
   for (size_t i = 0; i < arraysize(rlimit_strings); i++) {
     if (getrlimit(rlimit_strings[i].id, &limit) == 0) {
@@ -1007,18 +1027,22 @@ const static struct {
         out << "       unlimited";
       } else {
 #ifdef _AIX
-        out << "%16ld", limit.rlim_cur);
+        snprintf(buf, sizeof(buf), "%16ld", limit.rlim_cur);
+        out << buf;
 #else
-        out << "%16" PRIu64, limit.rlim_cur);
+        snprintf(buf, sizeof(buf), "%16" PRIu64, limit.rlim_cur);
+        out << buf;
 #endif
       }
       if (limit.rlim_max == RLIM_INFINITY) {
         out << "       unlimited\n";
       } else {
 #ifdef _AIX
-        out << "%16ld\n", limit.rlim_max);
+        snprintf(buf, sizeof(buf), "%16ld\n", limit.rlim_max);
+        out << buf;
 #else
-        out << "%16" PRIu64 "\n", limit.rlim_max);
+        snprintf(buf, sizeof(buf), "%16" PRIu64 "\n", limit.rlim_max);
+        out << buf;
 #endif
       }
     }
@@ -1034,6 +1058,7 @@ static void WriteInteger(std::ostream& out, size_t value) {
   int thousandsStack[8];  // Sufficient for max 64-bit number
   int stackTop = 0;
   int i;
+  char buf[64];
   size_t workingValue = value;
 
   do {
@@ -1045,7 +1070,8 @@ static void WriteInteger(std::ostream& out, size_t value) {
     if (i == (stackTop-1)) {
       out << thousandsStack[i];
     } else {
-      out << "%03u", thousandsStack[i]);
+      snprintf(buf, sizeof(buf), "%03u", thousandsStack[i]);
+      out << buf;
     }
     if (i > 0) {
        out << ",";
