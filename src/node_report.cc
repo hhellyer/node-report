@@ -120,7 +120,7 @@ unsigned int ProcessNodeReportEvents(const char* args) {
       event_flags |= NR_APICALL;
       cursor += sizeof("apicall") - 1;
     } else {
-      std::cerr << "Unrecognised argument for nodereport events option: %s\n", cursor);
+      std::cerr << "Unrecognised argument for nodereport events option: " << cursor << "\n";
       return 0;
     }
     if (*cursor == '+') {
@@ -132,7 +132,7 @@ unsigned int ProcessNodeReportEvents(const char* args) {
 
 unsigned int ProcessNodeReportCoreSwitch(const char* args) {
   if (strlen(args) == 0) {
-    std::cerr << "Missing argument for nodereport core switch option\n");
+    std::cerr << "Missing argument for nodereport core switch option\n";
   } else {
     // Parse the supplied switch
     if (!strncmp(args, "yes", sizeof("yes") - 1) || !strncmp(args, "true", sizeof("true") - 1)) {
@@ -140,7 +140,7 @@ unsigned int ProcessNodeReportCoreSwitch(const char* args) {
     } else if (!strncmp(args, "no", sizeof("no") - 1) || !strncmp(args, "false", sizeof("false") - 1)) {
       return 0;
     } else {
-      std::cerr << "Unrecognised argument for nodereport core switch option: " << %s << "\n", args);
+      std::cerr << "Unrecognised argument for nodereport core switch option: " << args << "\n";
     }
   }
   return 1;  // Default is to produce core dumps
@@ -151,7 +151,7 @@ unsigned int ProcessNodeReportSignal(const char* args) {
   return 0; // no-op on Windows
 #else
   if (strlen(args) == 0) {
-    std::cerr << "Missing argument for nodereport signal option\n");
+    std::cerr << "Missing argument for nodereport signal option\n";
   } else {
     // Parse the supplied switch
     if (!strncmp(args, "SIGUSR2", sizeof("SIGUSR2") - 1)) {
@@ -159,7 +159,7 @@ unsigned int ProcessNodeReportSignal(const char* args) {
     } else if (!strncmp(args, "SIGQUIT", sizeof("SIGQUIT") - 1)) {
       return SIGQUIT;
     } else {
-      std::cerr << "Unrecognised argument for nodereport signal option: %s\n", args);
+      std::cerr << "Unrecognised argument for nodereport signal option: "<< args << "\n";
     }
   }
   return SIGUSR2;  // Default signal is SIGUSR2
@@ -168,11 +168,11 @@ unsigned int ProcessNodeReportSignal(const char* args) {
 
 void ProcessNodeReportFileName(const char* args) {
   if (strlen(args) == 0) {
-    std::cerr << "Missing argument for nodereport filename option\n");
+    std::cerr << "Missing argument for nodereport filename option\n";
     return;
   }
   if (strlen(args) > NR_MAXNAME) {
-    std::cerr << "Supplied nodereport filename too long (max %d characters)\n", NR_MAXNAME);
+    std::cerr << "Supplied nodereport filename too long (max " << NR_MAXNAME << " characters)\n";
     return;
   }
   snprintf(report_filename, sizeof(report_filename), "%s", args);
@@ -180,11 +180,11 @@ void ProcessNodeReportFileName(const char* args) {
 
 void ProcessNodeReportDirectory(const char* args) {
   if (strlen(args) == 0) {
-    std::cerr << "Missing argument for nodereport directory option\n");
+    std::cerr << "Missing argument for nodereport directory option\n";
     return;
   }
   if (strlen(args) > NR_MAXPATH) {
-    std::cerr << "Supplied nodereport directory path too long (max %d characters)\n", NR_MAXPATH);
+    std::cerr << "Supplied nodereport directory path too long (max " << NR_MAXPATH << " characters)\n";
     return;
   }
   snprintf(report_directory, sizeof(report_directory), "%s", args);
@@ -192,7 +192,7 @@ void ProcessNodeReportDirectory(const char* args) {
 
 unsigned int ProcessNodeReportVerboseSwitch(const char* args) {
   if (strlen(args) == 0) {
-    std::cerr << "Missing argument for nodereport verbose switch option\n");
+    std::cerr << "Missing argument for nodereport verbose switch option\n";
     return 0;
   }
   // Parse the supplied switch
@@ -201,7 +201,7 @@ unsigned int ProcessNodeReportVerboseSwitch(const char* args) {
   } else if (!strncmp(args, "no", sizeof("no") - 1) || !strncmp(args, "false", sizeof("false") - 1)) {
     return 0;
   } else {
-    std::cerr << "Unrecognised argument for nodereport verbose switch option: %s\n", args);
+    std::cerr << "Unrecognised argument for nodereport verbose switch option: " << args << "\n";
   }
   return 0;  // Default is verbose mode off
 }
@@ -448,13 +448,13 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
     // Check for errors on the file open
     if (fp == nullptr) {
       if (strlen(report_directory) > 0) {
-        std::cerr << "\nFailed to open Node.js report file: %s directory: %s (errno: %d)\n", filename, report_directory, errno);
+        std::cerr << "\nFailed to open Node.js report file: " << filename << " directory: " << report_directory << " (errno: " << errno << ")\n";
       } else {
-        std::cerr << "\nFailed to open Node.js report file: %s (errno: %d)\n", filename, errno);
+        std::cerr << "\nFailed to open Node.js report file: " << filename << " (errno: " << errno << ")\n";
       }
       return;
     } else {
-      std::cerr << "\nWriting Node.js report to file: %s\n", filename);
+      std::cerr << "\nWriting Node.js report to file: " << filename << "\n";
     }
   }
 
@@ -462,10 +462,10 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
 
   // File stream opened OK, now start printing the NodeReport content, starting with the title
   // and header information (event, filename, timestamp and pid)
-  out << "================================================================================\n");
-  out << "==== NodeReport ================================================================\n");
-  out << "\nEvent: %s, location: \"%s\"\n", message, location);
-  out << "Filename: %s\n", filename);
+  out << "================================================================================\n";
+  out << "==== NodeReport ================================================================\n";
+  out << "\nEvent: " << message << ", location: \"" << location << "\"\n";
+  out << "Filename: " << filename << "\n";
 
   // Print dump event and module load date/time stamps
 #ifdef _WIN32
@@ -484,33 +484,33 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
           loadtime_tm_struct.tm_hour, loadtime_tm_struct.tm_min, loadtime_tm_struct.tm_sec);
 #endif
   // Print native process ID
-  out << "Process ID: %d\n", pid);
-  fflush(fp);
+  out << "Process ID: " << pid << std::endl;
+
 
   // Print out the command line.
   PrintCommandLine(out);
-  fflush(fp);
+  out << std::flush;
 
   // Print Node.js and OS version information
   PrintVersionInformation(out, isolate);
-  fflush(fp);
+  out << std::flush;
 
 // Print summary JavaScript stack backtrace
   PrintJavaScriptStack(out, isolate, event, location);
-  fflush(fp);
+  out << std::flush;
 
   // Print native stack backtrace
   PrintNativeStack(out);
-  fflush(fp);
+  out << std::flush;
 
   // Print V8 Heap and Garbage Collector information
   PrintGCStatistics(out, isolate);
-  fflush(fp);
+  out << std::flush;
 
   // Print OS and current thread resource usage
 #ifndef _WIN32
   PrintResourceUsage(out);
-  fflush(fp);
+  out << std::flush;
 #endif
 
   // Print libuv handle summary (TODO: investigate failure on Windows)
@@ -523,17 +523,17 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
   out << "\n(Flags: R=Ref, A=Active, I=Internal)\n";
   out << "\nFlags Type     Address\n";
   uv_print_all_handles(nullptr, fp);
-  fflush(fp);
+  out << std::flush;
 #endif
 
   // Print operating system information
   PrintSystemInformation(out, isolate);
 
   out << "\n================================================================================\n";
-  fflush(fp);
+  out << std::flush;
   fclose(fp);
 
-  std::cerr << "Node.js report completed\n");
+  std::cerr << "Node.js report completed\n";
   if (name != nullptr) {
     snprintf(name, NR_MAXNAME + 1, "%s", filename);  // return the NodeReport file name
   }
@@ -626,7 +626,7 @@ static void PrintVersionInformation(std::ostream& out, Isolate* isolate) {
       DWORD machine_name_size = 256;
       out << "\nOS version: Windows\n");
       if (GetComputerName(machine_name, &machine_name_size)) {
-        out << "\nMachine: " << %s << "\n", machine_name);
+        out << "\nMachine: " << " << %s << " << "\n", machine_name);
       }
     }
   }
@@ -659,7 +659,7 @@ static void PrintJavaScriptStack(std::ostream& out, Isolate* isolate, DumpEvent 
     break;
   default:
     // All other events, print the stack using StackTrace::StackTrace() and GetStackSample() APIs
-    PrintStackFromStackTrace(fp, isolate, event);
+    PrintStackFromStackTrace(out, isolate, event);
     break;
   }  // end switch(event)
 #else  // Unix, OSX
@@ -667,7 +667,8 @@ static void PrintJavaScriptStack(std::ostream& out, Isolate* isolate, DumpEvent 
   case kException:
   case kJavaScript:
     // Print the stack using Message::PrintCurrentStackTrace() API
-    Message::PrintCurrentStackTrace(isolate, fp);
+//    Message::PrintCurrentStackTrace(isolate, fp);
+    PrintStackFromStackTrace(out, isolate, event);
     break;
   case kFatalError:
     out << "No stack trace available\n";
@@ -675,7 +676,7 @@ static void PrintJavaScriptStack(std::ostream& out, Isolate* isolate, DumpEvent 
   case kSignal_JS:
   case kSignal_UV:
     // Print the stack using StackTrace::StackTrace() and GetStackSample() APIs
-    PrintStackFromStackTrace(fp, isolate, event);
+    PrintStackFromStackTrace(out, isolate, event);
     break;
   }  // end switch(event)
 #endif
@@ -713,9 +714,9 @@ static void PrintStackFromStackTrace(std::ostream& out, Isolate* isolate, DumpEv
   // Print the stack trace, adding in the pc values from GetStackSample() if available
   for (int i = 0; i < stack->GetFrameCount(); i++) {
     if (static_cast<size_t>(i) < info.frames_count) {
-      PrintStackFrame(fp, isolate, stack->GetFrame(i), i, samples[i]);
+      PrintStackFrame(out, isolate, stack->GetFrame(i), i, samples[i]);
     } else {
-      PrintStackFrame(fp, isolate, stack->GetFrame(i), i, nullptr);
+      PrintStackFrame(out, isolate, stack->GetFrame(i), i, nullptr);
     }
   }
 }
@@ -740,20 +741,20 @@ static void PrintStackFrame(std::ostream& out, Isolate* isolate, Local<StackFram
   // Now print the JavaScript function name and source information
   if (frame->IsEval()) {
     if (frame->GetScriptId() == Message::kNoScriptIdInfo) {
-      out << "at [eval]:%i:%i\n", line_number, column;
+      out << "at [eval]:" << line_number << ":" << column << "\n";
     } else {
-      out << "at [eval] (" << %s << ":%i:%i)\n", *script_name, line_number, column;
+      out << "at [eval] (" << *script_name << ":" << line_number << ":" << column << ")\n";
     }
     return;
   }
 
   if (fn_name_s.length() == 0) {
-    out  << %s << ":%i:%i\n", *script_name, line_number, column;
+    out  << *script_name << ":" << line_number << ":" << column << "\n";
   } else {
     if (frame->IsConstructor()) {
-      out  << %s << " [constructor] (" << %s << ":%i:%i)\n", *fn_name_s, *script_name, line_number, column;
+      out  << *fn_name_s << " [constructor] (" << *script_name << ":" << line_number << ":" << column << ")\n";
     } else {
-      out  << %s << " (" << %s << ":%i:%i)\n", *fn_name_s, *script_name, line_number, column;
+      out  << *fn_name_s << " (" << *script_name << ":" << line_number << ":" << column << ")\n";
     }
   }
 }
@@ -825,7 +826,7 @@ void PrintNativeStack(std::ostream& out) {
   // Get the native backtrace (array of instruction addresses)
   const int size = backtrace(frames, arraysize(frames));
   if (size <= 0) {
-    out << "Native backtrace failed, error %d\n", size;
+    out << "Native backtrace failed, error " << size << "\n";
     return;
   } else if (size <=2) {
     out << "No frames to print\n";
@@ -845,14 +846,14 @@ void PrintNativeStack(std::ostream& out) {
           out << demangled; // print demangled symbol name
           free(demangled);
         } else {
-          out  << %s , info.dli_sname); // just print the symbol name
+          out  << info.dli_sname; // just print the symbol name
         }
       }
       if (info.dli_fname != nullptr) {
         out << " [" << info.dli_fname << "]"; // print shared object name
       }
     }
-    out << "\n";
+    out << std::endl;
   }
 }
 #endif
@@ -875,31 +876,31 @@ static void PrintGCStatistics(std::ostream& out, Isolate* isolate) {
   for (size_t i = 0; i < isolate->NumberOfHeapSpaces(); i++) {
     isolate->GetHeapSpaceStatistics(&v8_heap_space_stats, i);
     out << "\nHeap space name: " << v8_heap_space_stats.space_name();
-    out << "\n    Memory size: ");
-    WriteInteger(fp, v8_heap_space_stats.space_size());
-    out << " bytes, committed memory: ");
-    WriteInteger(fp, v8_heap_space_stats.physical_space_size());
-    out << " bytes\n    Capacity: ");
-    WriteInteger(fp, v8_heap_space_stats.space_used_size() +
+    out << "\n    Memory size: ";
+    WriteInteger(out, v8_heap_space_stats.space_size());
+    out << " bytes, committed memory: ";
+    WriteInteger(out, v8_heap_space_stats.physical_space_size());
+    out << " bytes\n    Capacity: ";
+    WriteInteger(out, v8_heap_space_stats.space_used_size() +
                            v8_heap_space_stats.space_available_size());
-    out << " bytes, used: ");
-    WriteInteger(fp, v8_heap_space_stats.space_used_size());
-    out << " bytes, available: ");
-    WriteInteger(fp, v8_heap_space_stats.space_available_size());
-    out << " bytes");
+    out << " bytes, used: ";
+    WriteInteger(out, v8_heap_space_stats.space_used_size());
+    out << " bytes, available: ";
+    WriteInteger(out, v8_heap_space_stats.space_available_size());
+    out << " bytes";
   }
 
-  out << "\n\nTotal heap memory size: ");
-  WriteInteger(fp, v8_heap_stats.total_heap_size());
-  out << " bytes\nTotal heap committed memory: ");
-  WriteInteger(fp, v8_heap_stats.total_physical_size());
-  out << " bytes\nTotal used heap memory: ");
-  WriteInteger(fp, v8_heap_stats.used_heap_size());
-  out << " bytes\nTotal available heap memory: ");
-  WriteInteger(fp, v8_heap_stats.total_available_size());
-  out << " bytes\n\nHeap memory limit: ");
-  WriteInteger(fp, v8_heap_stats.heap_size_limit());
-  out << "\n");
+  out << "\n\nTotal heap memory size: ";
+  WriteInteger(out, v8_heap_stats.total_heap_size());
+  out << " bytes\nTotal heap committed memory: ";
+  WriteInteger(out, v8_heap_stats.total_physical_size());
+  out << " bytes\nTotal used heap memory: ";
+  WriteInteger(out, v8_heap_stats.used_heap_size());
+  out << " bytes\nTotal available heap memory: ";
+  WriteInteger(out, v8_heap_stats.total_available_size());
+  out << " bytes\n\nHeap memory limit: ";
+  WriteInteger(out, v8_heap_stats.heap_size_limit());
+  out << "\n";
 }
 
 #ifndef _WIN32
@@ -908,39 +909,39 @@ static void PrintGCStatistics(std::ostream& out, Isolate* isolate) {
  *
  ******************************************************************************/
 static void PrintResourceUsage(std::ostream& out) {
-  out << "\n================================================================================");
-  out << "\n==== Resource Usage ============================================================\n");
+  out << "\n================================================================================";
+  out << "\n==== Resource Usage ============================================================\n";
 
   // Process and current thread usage statistics
   struct rusage stats;
   out << "\nProcess total resource usage:");
   if (getrusage(RUSAGE_SELF, &stats) == 0) {
 #if defined(__APPLE__) || defined(_AIX)
-    out << "\n  User mode CPU: %ld.%06d secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
-    out << "\n  Kernel mode CPU: %ld.%06d secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec);
+    out << "\n  User mode CPU: %ld.%06d secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec;
+    out << "\n  Kernel mode CPU: %ld.%06d secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec;
 #else
-    out << "\n  User mode CPU: %ld.%06ld secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
-    out << "\n  Kernel mode CPU: %ld.%06ld secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec);
+    out << "\n  User mode CPU: %ld.%06ld secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec;
+    out << "\n  Kernel mode CPU: %ld.%06ld secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec;
 #endif
     out << "\n  Maximum resident set size: ");
-    WriteInteger(fp, stats.ru_maxrss * 1024);
-    out << " bytes\n  Page faults: %ld (I/O required) %ld (no I/O required)", stats.ru_majflt, stats.ru_minflt);
+    WriteInteger(out, stats.ru_maxrss * 1024);
+    out << " bytes\n  Page faults: %ld (I/O required) %ld (no I/O required)", stats.ru_majflt, stats.ru_minflt;
     out << "\n  Filesystem activity: %ld reads %ld writes", stats.ru_inblock, stats.ru_oublock);
   }
 #ifdef RUSAGE_THREAD
-  out << "\n\nEvent loop thread resource usage:");
+  out << "\n\nEvent loop thread resource usage:";
   if (getrusage(RUSAGE_THREAD, &stats) == 0) {
 #if defined(__APPLE__) || defined(_AIX)
-    out << "\n  User mode CPU: %ld.%06d secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
-    out << "\n  Kernel mode CPU: %ld.%06d secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec);
+    out << "\n  User mode CPU: %ld.%06d secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec;
+    out << "\n  Kernel mode CPU: %ld.%06d secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec;
 #else
-    out << "\n  User mode CPU: %ld.%06ld secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
-    out << "\n  Kernel mode CPU: %ld.%06ld secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec);
+    out << "\n  User mode CPU: %ld.%06ld secs", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec;
+    out << "\n  Kernel mode CPU: %ld.%06ld secs", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec;
 #endif
-    out << "\n  Filesystem activity: %ld reads %ld writes", stats.ru_inblock, stats.ru_oublock);
+    out << "\n  Filesystem activity: %ld reads %ld writes", stats.ru_inblock, stats.ru_oublock;
   }
 #endif
-  out << "\n");
+  out << std::endl;
 }
 #endif
 
@@ -949,8 +950,8 @@ static void PrintResourceUsage(std::ostream& out) {
  *
  ******************************************************************************/
 static void PrintSystemInformation(std::ostream& out, Isolate* isolate) {
-  out << "\n================================================================================");
-  out << "\n==== System Information ========================================================\n");
+  out << "\n================================================================================";
+  out << "\n==== System Information ========================================================\n";
 
 #ifdef _WIN32
   out << "\nEnvironment variables\n");
@@ -969,12 +970,12 @@ static void PrintSystemInformation(std::ostream& out, Isolate* isolate) {
     FreeEnvironmentStrings(lpvEnv);
   }
 #else
-  out << "\nEnvironment variables\n");
+  out << "\nEnvironment variables\n";
   int index = 1;
   char* env_var = *environ;
 
   while (env_var != nullptr) {
-    out << "  " << %s << "\n", env_var);
+    out << "  " << env_var << "\n";
     env_var = *(environ + index++);
   }
 
@@ -1001,9 +1002,9 @@ const static struct {
 
   for (size_t i = 0; i < arraysize(rlimit_strings); i++) {
     if (getrlimit(rlimit_strings[i].id, &limit) == 0) {
-      out << "  " << %s << " ", rlimit_strings[i].description);
+      out << "  " << rlimit_strings[i].description << " ";
       if (limit.rlim_cur == RLIM_INFINITY) {
-        out << "       unlimited");
+        out << "       unlimited";
       } else {
 #ifdef _AIX
         out << "%16ld", limit.rlim_cur);
@@ -1012,7 +1013,7 @@ const static struct {
 #endif
       }
       if (limit.rlim_max == RLIM_INFINITY) {
-        out << "       unlimited\n");
+        out << "       unlimited\n";
       } else {
 #ifdef _AIX
         out << "%16ld\n", limit.rlim_max);
@@ -1042,12 +1043,12 @@ static void WriteInteger(std::ostream& out, size_t value) {
 
   for (i = stackTop-1; i >= 0; i--) {
     if (i == (stackTop-1)) {
-      out << "%u", thousandsStack[i]);
+      out << thousandsStack[i];
     } else {
       out << "%03u", thousandsStack[i]);
     }
     if (i > 0) {
-       out << ",");
+       out << ",";
     }
   }
 }
