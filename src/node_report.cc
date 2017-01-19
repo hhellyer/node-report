@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <fstream>
 
 #if !defined(_MSC_VER)
 #include <strings.h>
@@ -67,7 +68,7 @@ using v8::V8;
 
 // Internal/static function declarations
 static void PrintCommandLine(std::ostream& out);
-static void PrintVersionInformation(std::ostream& out, Isolate* isolate);
+static void PrintVersionInformation(std::ostream& out);
 static void PrintJavaScriptStack(std::ostream& out, Isolate* isolate, DumpEvent event, const char* location);
 static void PrintStackFromStackTrace(std::ostream& out, Isolate* isolate, DumpEvent event);
 static void PrintStackFrame(std::ostream& out, Isolate* isolate, Local<StackFrame> frame, int index, void* pc);
@@ -427,11 +428,12 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
   }
 
   // Open the NodeReport file stream for writing. Supports stdout/err, user-specified or (default) generated name
-  FILE* fp = nullptr;
+  std::ofstream outfile;
+  std::ostream* outstream;
   if (!strncmp(filename, "stdout", sizeof("stdout") - 1)) {
-    fp = stdout;
+    outstream = &std::cout;
   } else if (!strncmp(filename, "stderr", sizeof("stderr") - 1)) {
-    fp = stderr;
+    outstream = &std::cerr;
   } else {
     // Regular file. Append filename to directory path if one was specified
     if (strlen(report_directory) > 0) {
@@ -441,12 +443,12 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
 #else
       snprintf(pathname, sizeof(pathname), "%s%s%s", report_directory, "/", filename);
 #endif
-      fp = fopen(pathname, "w");
+      outfile.open(pathname, std::ios::out);
     } else {
-      fp = fopen(filename, "w");
+      outfile.open(filename, std::ios::out);
     }
     // Check for errors on the file open
-    if (fp == nullptr) {
+    if (!outfile.is_open()) {
       if (strlen(report_directory) > 0) {
         std::cerr << "\nFailed to open Node.js report file: " << filename << " directory: " << report_directory << " (errno: " << errno << ")\n";
       } else {
@@ -458,7 +460,8 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
     }
   }
 
-  std::ostream& out = std::cout;
+  // Pass our stream about by reference, not by copying it.
+  std::ostream &out = outfile.is_open() ? outfile : *outstream;
 
   // File stream opened OK, now start printing the NodeReport content, starting with the title
   // and header information (event, filename, timestamp and pid)
@@ -497,7 +500,7 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
   out << std::flush;
 
   // Print Node.js and OS version information
-  PrintVersionInformation(out, isolate);
+  PrintVersionInformation(out);
   out << std::flush;
 
 // Print summary JavaScript stack backtrace
@@ -527,7 +530,22 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
   out << "\n==== Node.js libuv Handle Summary ==============================================\n";
   out << "\n(Flags: R=Ref, A=Active, I=Internal)\n";
   out << "\nFlags Type     Address\n";
-  uv_print_all_handles(nullptr, fp);
+
+  /* uv_print_all_handles insists on a FILE*, we can't pass it
+   * a stream.
+   */
+  std::FILE *handles_fp = std::tmpfile();
+  if( handles_fp != nullptr ) {
+    char handles_buf[64];
+    uv_print_all_handles(nullptr, handles_fp);
+    std::fflush(handles_fp);
+    std::rewind(handles_fp);
+    while( std::fgets(handles_buf, sizeof(handles_buf), handles_fp) != nullptr ) {
+      out << handles_buf;
+    }
+    // Calling close on a file from tmpfile *should* delete it.
+    std::fclose(handles_fp);
+  }
   out << std::flush;
 #endif
 
@@ -536,7 +554,11 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
 
   out << "\n================================================================================\n";
   out << std::flush;
-  fclose(fp);
+
+  // Do not close stdout/stderr, only close files we opened.
+  if(outfile.is_open()) {
+    outfile.close();
+  }
 
   std::cerr << "Node.js report completed\n";
   if (name != nullptr) {
@@ -559,7 +581,7 @@ static void PrintCommandLine(std::ostream& out) {
  * Function to print Node.js version, OS version and machine information
  *
  ******************************************************************************/
-static void PrintVersionInformation(std::ostream& out, Isolate* isolate) {
+static void PrintVersionInformation(std::ostream& out) {
 
   // Print Node.js and deps component versions
   out << "\n" << version_string;
@@ -670,11 +692,22 @@ static void PrintJavaScriptStack(std::ostream& out, Isolate* isolate, DumpEvent 
 #else  // Unix, OSX
   switch (event) {
   case kException:
-  case kJavaScript:
+  case kJavaScript: {
     // Print the stack using Message::PrintCurrentStackTrace() API
-//    Message::PrintCurrentStackTrace(isolate, fp);
-    PrintStackFromStackTrace(out, isolate, event);
+    std::FILE *stack_fp = std::tmpfile();
+    if( stack_fp != nullptr ) {
+      char stack_buf[64];
+      Message::PrintCurrentStackTrace(isolate, stack_fp);
+      std::fflush(stack_fp);
+      std::rewind(stack_fp);
+      while( std::fgets(stack_buf, sizeof(stack_buf), stack_fp) != nullptr ) {
+        out << stack_buf;
+      }
+      // Calling close on a file from tmpfile *should* delete it.
+      std::fclose(stack_fp);
+    }
     break;
+  }
   case kFatalError:
     out << "No stack trace available\n";
     break;
