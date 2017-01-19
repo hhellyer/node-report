@@ -67,6 +67,7 @@ using v8::String;
 using v8::V8;
 
 // Internal/static function declarations
+static void WriteNodeReport(Isolate* isolate, DumpEvent event, const char* message, const char* location, char* filename, std::ostream &out, void* time);
 static void PrintCommandLine(std::ostream& out);
 static void PrintVersionInformation(std::ostream& out);
 static void PrintJavaScriptStack(std::ostream& out, Isolate* isolate, DumpEvent event, const char* location);
@@ -463,12 +464,53 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
   // Pass our stream about by reference, not by copying it.
   std::ostream &out = outfile.is_open() ? outfile : *outstream;
 
+  WriteNodeReport(isolate, event, message, location, filename, out, &tm_struct);
+
+  // Do not close stdout/stderr, only close files we opened.
+  if(outfile.is_open()) {
+    outfile.close();
+  }
+
+  std::cerr << "Node.js report completed\n";
+  if (name != nullptr) {
+    snprintf(name, NR_MAXNAME + 1, "%s", filename);  // return the NodeReport file name
+  }
+
+}
+
+void GetNodeReport(Isolate* isolate, DumpEvent event, const char* message, const char* location, std::ostream& out) {
+  // Obtain the current time and the pid (platform dependent)
+#ifdef _WIN32
+  SYSTEMTIME tm_struct;
+  GetLocalTime(&tm_struct);
+#else  // UNIX, OSX
+  struct timeval time_val;
+  struct tm tm_struct;
+  gettimeofday(&time_val, nullptr);
+  localtime_r(&time_val.tv_sec, &tm_struct);
+#endif
+  WriteNodeReport(isolate, event, message, location, nullptr, out, &tm_struct);
+}
+
+
+static void WriteNodeReport(Isolate* isolate, DumpEvent event, const char* message, const char* location, char* filename, std::ostream &out, void* time) {
+
+#ifdef _WIN32
+  SYSTEMTIME tm_struct = (SYSTEMTIME*)time;
+  DWORD pid = GetCurrentProcessId();
+#else  // UNIX, OSX
+  struct tm tm_struct = *(tm*)time;
+  pid_t pid = getpid();
+#endif
+
   // File stream opened OK, now start printing the NodeReport content, starting with the title
   // and header information (event, filename, timestamp and pid)
   out << "================================================================================\n";
   out << "==== NodeReport ================================================================\n";
   out << "\nEvent: " << message << ", location: \"" << location << "\"\n";
-  out << "Filename: " << filename << "\n";
+  if( filename != nullptr ) {
+    out << "Filename: " << filename << "\n";
+  }
 
   // Print dump event and module load date/time stamps
   char timebuf[64];
@@ -555,15 +597,6 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
   out << "\n================================================================================\n";
   out << std::flush;
 
-  // Do not close stdout/stderr, only close files we opened.
-  if(outfile.is_open()) {
-    outfile.close();
-  }
-
-  std::cerr << "Node.js report completed\n";
-  if (name != nullptr) {
-    snprintf(name, NR_MAXNAME + 1, "%s", filename);  // return the NodeReport file name
-  }
   report_active = false;
 }
 
