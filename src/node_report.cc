@@ -492,6 +492,29 @@ void GetNodeReport(Isolate* isolate, DumpEvent event, const char* message, const
   WriteNodeReport(isolate, event, message, location, nullptr, out, &tm_struct);
 }
 
+#ifndef _WIN32
+enum {
+  UV__HANDLE_INTERNAL = 0x8000,
+  UV__HANDLE_ACTIVE   = 0x4000,
+  UV__HANDLE_REF      = 0x2000,
+  UV__HANDLE_CLOSING  = 0 /* no-op on unix */
+};
+#else
+# define UV__HANDLE_INTERNAL  0x80
+# define UV__HANDLE_ACTIVE    0x40
+# define UV__HANDLE_REF       0x20
+# define UV__HANDLE_CLOSING   0x01
+#endif
+
+static void walkHandle(uv_handle_t* h, void* arg) {
+  fprintf(stderr,
+              "[%c%c%c] %p\n",
+              "R-"[!(h->flags & UV__HANDLE_REF)],
+              "A-"[!(h->flags & UV__HANDLE_ACTIVE)],
+              "I-"[!(h->flags & UV__HANDLE_INTERNAL)],
+              (void*)h);
+}
+
 
 static void WriteNodeReport(Isolate* isolate, DumpEvent event, const char* message, const char* location, char* filename, std::ostream &out, void* time) {
 
@@ -590,6 +613,8 @@ static void WriteNodeReport(Isolate* isolate, DumpEvent event, const char* messa
   }
   out << std::flush;
 #endif
+
+  uv_walk(uv_default_loop(), walkHandle, nullptr);
 
   // Print operating system information
   PrintSystemInformation(out, isolate);
