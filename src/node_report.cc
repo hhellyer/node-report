@@ -496,7 +496,7 @@ void GetNodeReport(Isolate* isolate, DumpEvent event, const char* message, const
 static void WriteNodeReport(Isolate* isolate, DumpEvent event, const char* message, const char* location, char* filename, std::ostream &out, void* time) {
 
 #ifdef _WIN32
-  SYSTEMTIME tm_struct = (SYSTEMTIME*)time;
+  SYSTEMTIME tm_struct = *(SYSTEMTIME*)time;
   DWORD pid = GetCurrentProcessId();
 #else  // UNIX, OSX
   struct tm tm_struct = *(tm*)time;
@@ -673,10 +673,10 @@ static void PrintVersionInformation(std::ostream& out) {
       out <<  "\nOS version: " << os_name << "\n";
 
       if (os_info->sv101_comment != NULL) {
-        out << "\nMachine: %ls %ls\n", os_info->sv101_name,
-                os_info->sv101_comment);
+        out << "\nMachine: " << os_info->sv101_name << " " <<  os_info->sv101_comment << "\n";
+
       } else {
-        out << "\nMachine: %ls\n", os_info->sv101_name);
+        out << "\nMachine: " << os_info->sv101_name << "\n";
       }
       if (os_info != NULL) {
         NetApiBufferFree(os_info);
@@ -684,9 +684,9 @@ static void PrintVersionInformation(std::ostream& out) {
     } else {
       TCHAR machine_name[256];
       DWORD machine_name_size = 256;
-      out << "\nOS version: Windows\n");
+      out << "\nOS version: Windows\n";
       if (GetComputerName(machine_name, &machine_name_size)) {
-        out << "\nMachine: " << " << %s << " << "\n", machine_name);
+        out << "\nMachine: " << machine_name << "\n";
       }
     }
   }
@@ -715,7 +715,7 @@ static void PrintJavaScriptStack(std::ostream& out, Isolate* isolate, DumpEvent 
   switch (event) {
   case kFatalError:
     // Stack trace on fatal error not supported on Windows
-    out << "No stack trace available\n");
+    out << "No stack trace available\n";
     break;
   default:
     // All other events, print the stack using StackTrace::StackTrace() and GetStackSample() APIs
@@ -847,6 +847,7 @@ void PrintNativeStack(std::ostream& out) {
   HANDLE hProcess = GetCurrentProcess();
   SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
   SymInitialize(hProcess, nullptr, TRUE);
+  char buf[64];
 
   WORD numberOfFrames = CaptureStackBackTrace(2, 64, frames, nullptr);
 
@@ -864,16 +865,19 @@ void PrintNativeStack(std::ostream& out) {
       IMAGEHLP_LINE64 line;
       line.SizeOfStruct = sizeof(line);
       if (SymGetLineFromAddr64(hProcess, dwAddress, &dwOffset, &line)) {
-        out << "%2d: [pc=0x%p] " << %s << " [+%d] in " << %s << ": line: %lu\n", i,
-          reinterpret_cast<void*>(pSymbol->Address), pSymbol->Name,
-          dwOffset, line.FileName, line.LineNumber);
+        snprintf(buf, sizeof(buf), "%2d: [pc=0x%p] %s [+%d] in %s: line: %lu\n", i,
+                  reinterpret_cast<void*>(pSymbol->Address), pSymbol->Name,
+                  dwOffset, line.FileName, line.LineNumber);
+        out << buf;
       } else {
-        out << "%2d: [pc=0x%p] " << %s << " [+%lld]\n", i,
-          reinterpret_cast<void*>(pSymbol->Address), pSymbol->Name,
-          dwOffset64);
+        snprintf(buf, sizeof(buf), "%2d: [pc=0x%p] %s [+%lld]\n", i,
+                  reinterpret_cast<void*>(pSymbol->Address), pSymbol->Name,
+                  dwOffset64);
+        out << buf;
       }
     } else { // SymFromAddr() failed, just print the address
-      out << "%2d: [pc=0x%p]\n", i, reinterpret_cast<void*>(dwAddress) ;
+      snprintf(buf, sizeof(buf), "%2d: [pc=0x%p]\n", i, reinterpret_cast<void*>(dwAddress));
+      out << buf;
     }
   }
 }
@@ -1039,7 +1043,7 @@ static void PrintSystemInformation(std::ostream& out, Isolate* isolate) {
   out << "\n==== System Information ========================================================\n";
 
 #ifdef _WIN32
-  out << "\nEnvironment variables\n");
+  out << "\nEnvironment variables\n";
   LPTSTR lpszVariable;
   LPTCH lpvEnv;
 
@@ -1049,7 +1053,7 @@ static void PrintSystemInformation(std::ostream& out, Isolate* isolate) {
     // Variable strings are separated by null bytes, and the block is terminated by a null byte.
     lpszVariable = reinterpret_cast<LPTSTR>(lpvEnv);
     while (*lpszVariable) {
-      out << "  " << %s << "\n", lpszVariable);
+      out << "  " << lpszVariable << "\n", lpszVariable;
       lpszVariable += lstrlen(lpszVariable) + 1;
     }
     FreeEnvironmentStrings(lpvEnv);
