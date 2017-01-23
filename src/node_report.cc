@@ -1,5 +1,6 @@
 #include "node_report.h"
 #include "v8.h"
+#include "uv.h"
 #include "time.h"
 
 #include <fcntl.h>
@@ -507,12 +508,55 @@ enum {
 #endif
 
 static void walkHandle(uv_handle_t* h, void* arg) {
+  std::string type;
+  std::string data;
+  uv_any_handle* handle = (uv_any_handle*)h;
+
+  switch (h->type) {
+    case UV_ASYNC: type = "async"; break;
+    case UV_CHECK: type = "check"; break;
+    case UV_FS_EVENT: type = "fs_event"; break;
+    case UV_FS_POLL: type = "fs_poll"; break;
+    case UV_HANDLE: type = "handle"; break;
+    case UV_IDLE: type = "idle"; break;
+    case UV_NAMED_PIPE: type = "pipe"; break;
+    case UV_POLL: type = "poll"; break;
+    case UV_PREPARE: type = "prepare"; break;
+    case UV_PROCESS: type = "process"; break;
+    case UV_STREAM: type = "stream"; break;
+    case UV_TCP: {
+      struct sockaddr_storage addr_storage;
+      struct sockaddr* addr = (sockaddr*)&addr_storage;
+      int addr_size = sizeof(addr);
+      type = "tcp";
+      uv_tcp_getsockname(&(handle->tcp), addr, &addr_size);
+      std::string sockname(addr->sa_data);
+      uv_tcp_getpeername(&(handle->tcp), addr, &addr_size);
+      std::string peername(addr->sa_data);
+//      printf("%s\n", addr->sa_data);
+      data = "Socket Name: " + sockname + " Peer Name: " + peername;
+      break;
+    }
+    case UV_TIMER:
+      type = "timer";
+      data = "Repeat: " + std::to_string(uv_timer_get_repeat(&(handle->timer)));
+      break;
+    case UV_TTY: type = "tty"; break;
+    case UV_UDP: type = "udp"; break;
+    case UV_SIGNAL:
+      type = "signal";
+      data = "signum: " + std::to_string(handle->signal.signum);
+      break;
+  }
+
+
+
   fprintf(stderr,
-              "[%c%c%c] %p\n",
+              "[%c%c%c] %s\t %p %s\n",
               "R-"[!(h->flags & UV__HANDLE_REF)],
               "A-"[!(h->flags & UV__HANDLE_ACTIVE)],
-              "I-"[!(h->flags & UV__HANDLE_INTERNAL)],
-              (void*)h);
+              "I-"[!(h->flags & UV__HANDLE_INTERNAL)], type.c_str(),
+              (void*)h, data.c_str());
 }
 
 
