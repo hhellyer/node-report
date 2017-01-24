@@ -492,6 +492,46 @@ void GetNodeReport(Isolate* isolate, DumpEvent event, const char* message, const
   WriteNodeReport(isolate, event, message, location, nullptr, out, &tm_struct);
 }
 
+static void walkHandle(uv_handle_t* h, void* arg) {
+  std::string type;
+  std::string data = "";
+  std::ostream* out = (std::ostream*)arg;
+  char buf[64];
+
+  // List all the types so we get a compile warning if we've missed one,
+  // (using default: supresses the compiler warning.)
+  switch (h->type) {
+    case UV_UNKNOWN_HANDLE: type = "unknown"; break;
+    case UV_ASYNC: type = "async"; break;
+    case UV_CHECK: type = "check"; break;
+    case UV_FS_EVENT: type = "fs_event"; break;
+    case UV_FS_POLL: type = "fs_poll"; break;
+    case UV_HANDLE: type = "handle"; break;
+    case UV_IDLE: type = "idle"; break;
+    case UV_NAMED_PIPE: type = "pipe"; break;
+    case UV_POLL: type = "poll"; break;
+    case UV_PREPARE: type = "prepare"; break;
+    case UV_PROCESS: type = "process"; break;
+    case UV_STREAM: type = "stream"; break;
+    case UV_TCP: type = "tcp"; break;
+    case UV_TIMER: type = "timer"; break;
+    case UV_TTY: type = "tty"; break;
+    case UV_UDP: type = "udp"; break;
+    case UV_SIGNAL: type = "signal"; break;
+    case UV_FILE: type = "file"; break;
+    case UV_HANDLE_TYPE_MAX : type = "max"; break;
+  }
+
+  snprintf(buf, sizeof(buf),
+              "[%c%c] %s\t %p\n",
+              uv_has_ref(h)?'R':'-',
+              uv_is_active(h)?'A':'-',
+              //"I-"[!(h->flags & UV__HANDLE_INTERNAL)],
+              type.c_str(), (void*)h);
+
+  *out << buf;
+}
+
 
 static void WriteNodeReport(Isolate* isolate, DumpEvent event, const char* message, const char* location, char* filename, std::ostream &out, void* time) {
 
@@ -567,29 +607,13 @@ static void WriteNodeReport(Isolate* isolate, DumpEvent event, const char* messa
   // Note: documentation of the uv_print_all_handles() API says "This function
   // is meant for ad hoc debugging, there is no API/ABI stability guarantee"
   // http://docs.libuv.org/en/v1.x/misc.html
-#ifndef _WIN32
+//#ifndef _WIN32
   out << "\n================================================================================";
   out << "\n==== Node.js libuv Handle Summary ==============================================\n";
-  out << "\n(Flags: R=Ref, A=Active, I=Internal)\n";
+  out << "\n(Flags: R=Ref, A=Active)\n";
   out << "\nFlags Type     Address\n";
-
-  /* uv_print_all_handles insists on a FILE*, we can't pass it
-   * a stream.
-   */
-  std::FILE *handles_fp = std::tmpfile();
-  if( handles_fp != nullptr ) {
-    char handles_buf[64];
-    uv_print_all_handles(nullptr, handles_fp);
-    std::fflush(handles_fp);
-    std::rewind(handles_fp);
-    while( std::fgets(handles_buf, sizeof(handles_buf), handles_fp) != nullptr ) {
-      out << handles_buf;
-    }
-    // Calling close on a file from tmpfile *should* delete it.
-    std::fclose(handles_fp);
-  }
-  out << std::flush;
-#endif
+  uv_walk(uv_default_loop(), walkHandle, (void*)&out);
+//#endif
 
   // Print operating system information
   PrintSystemInformation(out, isolate);
