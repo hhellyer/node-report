@@ -11,6 +11,10 @@
 #include <iostream>
 #include <fstream>
 
+#include <sys/socket.h>
+#include <netdb.h>
+
+
 #if !defined(_MSC_VER)
 #include <strings.h>
 #endif
@@ -509,7 +513,7 @@ enum {
 
 static void walkHandle(uv_handle_t* h, void* arg) {
   std::string type;
-  std::string data;
+  std::string data = "";
   uv_any_handle* handle = (uv_any_handle*)h;
 
   switch (h->type) {
@@ -527,26 +531,95 @@ static void walkHandle(uv_handle_t* h, void* arg) {
     case UV_TCP: {
       struct sockaddr_storage addr_storage;
       struct sockaddr* addr = (sockaddr*)&addr_storage;
+      char hostbuf[64];
+      char servbuf[64];
       int addr_size = sizeof(addr);
+      int rc = 0;
       type = "tcp";
-      uv_tcp_getsockname(&(handle->tcp), addr, &addr_size);
-      std::string sockname(addr->sa_data);
-      uv_tcp_getpeername(&(handle->tcp), addr, &addr_size);
-      std::string peername(addr->sa_data);
+//      std::string sockname(addr->sa_data);
+//      uv_tcp_getpeername(&(handle->tcp), addr, &addr_size);
+//      std::string peername(addr->sa_data);
 //      printf("%s\n", addr->sa_data);
-      data = "Socket Name: " + sockname + " Peer Name: " + peername;
+      rc = uv_tcp_getsockname(&(handle->tcp), addr, &addr_size);
+      rc = getnameinfo(addr, addr_size, hostbuf, sizeof(hostbuf), servbuf, sizeof(servbuf), 0);
+      uv_ip4_name((struct sockaddr_in *)addr, hostbuf, sizeof(hostbuf)); // TODO - should use inet_ntop to get port and IP.
+      data += std::string(hostbuf)+ ":" + std::string(servbuf) + " -> ";
+      rc = uv_tcp_getpeername(&(handle->tcp), addr, &addr_size);
+      rc = getnameinfo(addr, addr_size, hostbuf, sizeof(hostbuf), servbuf, sizeof(servbuf), 0);
+      uv_ip4_name((struct sockaddr_in *)addr, hostbuf, sizeof(hostbuf));
+      data += std::string(hostbuf)+ ":" + std::string(servbuf) + " ";
       break;
     }
     case UV_TIMER:
       type = "timer";
       data = "Repeat: " + std::to_string(uv_timer_get_repeat(&(handle->timer)));
       break;
-    case UV_TTY: type = "tty"; break;
+    case UV_TTY: {
+      type = "tty";
+//      uv_os_fd_t fd_v;
+//      uv_os_fd_t* fd = &fd_v;
+//      int rc  = uv_fileno(h, fd);
+//      // uv_os_fd_t is an int on Unix and HANDLE on Windows.
+//#ifndef _WIN32
+//      if( rc == 0 ) {
+//        switch (fd_v) {
+//        case 0:
+//          data = "stdin";
+//        case 1:
+//          data = "stdout";
+//        case 2:
+//          data = "stderr";
+//        default:
+//          data = "file descriptor: " + std::to_string((int)fd_v);
+//          break;
+//        }
+//       //printf("stdin is %d, stdout is %d, stderr is %d\n", fileno(stdin), fileno(stdout), fileno(stderr));
+//      }
+//#endif
+      break;
+    }
     case UV_UDP: type = "udp"; break;
     case UV_SIGNAL:
       type = "signal";
       data = "signum: " + std::to_string(handle->signal.signum);
       break;
+    default:
+      break;
+  }
+
+  if( h->type == UV_TCP || h->type == UV_UDP
+#ifndef _WIN32
+      || h->type == UV_NAMED_PIPE
+#endif
+      ) {
+    int send_size = 0;
+    int recv_size = 0;
+    uv_send_buffer_size(h, &send_size);
+    uv_recv_buffer_size(h, &recv_size);
+    data += "send buffer size: " + std::to_string(send_size) + " recv buffer size: " + std::to_string(recv_size) + " ";
+  }
+
+  if( h->type == UV_TCP || h->type == UV_NAMED_PIPE || h->type == UV_TTY || h->type == UV_UDP || h->type == UV_POLL ) {
+    uv_os_fd_t fd_v;
+    uv_os_fd_t* fd = &fd_v;
+    int rc  = uv_fileno(h, fd);
+    // uv_os_fd_t is an int on Unix and HANDLE on Windows.
+#ifndef _WIN32
+    if( rc == 0 ) {
+      switch (fd_v) {
+      case 0:
+        data += "stdin";
+      case 1:
+        data += "stdout";
+      case 2:
+        data += "stderr";
+      default:
+        data += "file descriptor: " + std::to_string((int)fd_v);
+        break;
+      }
+     //printf("stdin is %d, stdout is %d, stderr is %d\n", fileno(stdin), fileno(stdout), fileno(stderr));
+    }
+#endif
   }
 
 
