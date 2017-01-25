@@ -1033,7 +1033,7 @@ static void PrintResourceUsage(std::ostream& out) {
 #if defined(__APPLE__) || defined(_AIX)
     snprintf( buf, sizeof(buf), "%ld.%06d", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
     out << "\n  User mode CPU: " << buf << " secs";
-    snprintf( buf, sizeof(buf), "%ld.%06d", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec;
+    snprintf( buf, sizeof(buf), "%ld.%06d", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec);
     out << "\n  Kernel mode CPU: " << buf << " secs";
 #else
     snprintf( buf, sizeof(buf), "%ld.%06ld", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
