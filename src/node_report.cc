@@ -84,7 +84,7 @@ static void PrintResourceUsage(std::ostream& out);
 #endif
 static void PrintGCStatistics(std::ostream& out, Isolate* isolate);
 static void PrintSystemInformation(std::ostream& out, Isolate* isolate);
-static void PrintLoadedLibraries(FILE* fp, Isolate* isolate);
+static void PrintLoadedLibraries(std::ostream& out, Isolate* isolate);
 static void WriteInteger(std::ostream& out, size_t value);
 
 // Global variables
@@ -1133,8 +1133,8 @@ const static struct {
   }
 #endif
 
-  fprintf(fp, "\nLoaded libraries\n");
-  PrintLoadedLibraries(fp, isolate);
+  out << "\nLoaded libraries\n";
+  PrintLoadedLibraries(out, isolate);
 }
 
 /*******************************************************************************
@@ -1143,22 +1143,22 @@ const static struct {
  ******************************************************************************/
 #ifdef __linux__
 static int LibraryPrintCallback(struct dl_phdr_info *info, size_t size, void *data) {
-  FILE* fp = (FILE*)data;
+  std::ostream* out = (std::ostream*)data;
   if (info->dlpi_name != nullptr && *info->dlpi_name != '\0') {
-    fprintf(fp, "  %s\n", info->dlpi_name);
+    *out << "  " << info->dlpi_name << "\n";
   }
   return 0;
 }
 #endif
 
-static void PrintLoadedLibraries(FILE* fp, Isolate* isolate) {
+static void PrintLoadedLibraries(std::ostream& out, Isolate* isolate) {
 #ifdef __linux__
-  dl_iterate_phdr(LibraryPrintCallback, fp);
+  dl_iterate_phdr(LibraryPrintCallback, &out);
 #elif __APPLE__
   int i = 0;
   const char *name = _dyld_get_image_name(i);
   while (name != nullptr) {
-    fprintf(fp, "  %s\n", name);
+    out << "  " << name << "\n";
     i++;
     name = _dyld_get_image_name(i);
   }
@@ -1189,9 +1189,9 @@ static void PrintLoadedLibraries(FILE* fp, Isolate* isolate) {
       char* member_name = cur_info->ldinfo_filename
         + strlen(cur_info->ldinfo_filename) + 1;
       if (*member_name != '\0') {
-        fprintf(fp, "  %s(%s)\n", cur_info->ldinfo_filename, member_name);
+        out << "  " << cur_info->ldinfo_filename << "(" << member_name << ")\n";
       } else {
-        fprintf(fp, "  %s\n", cur_info->ldinfo_filename);
+        out << "  " << cur_info->ldinfo_filename << "\n";
       }
       buf += cur_info->ldinfo_next;
     } while (cur_info->ldinfo_next != 0);
@@ -1203,7 +1203,7 @@ static void PrintLoadedLibraries(FILE* fp, Isolate* isolate) {
   HANDLE process_handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
                                       FALSE, GetCurrentProcessId());
   if (process_handle == NULL) {
-    fprintf(fp, "No library information available\n");
+    out << "No library information available\n";
     return;
   }
   // Get a list of all the modules in this process
@@ -1223,13 +1223,13 @@ static void PrintLoadedLibraries(FILE* fp, Isolate* isolate) {
         // Obtain and print the full pathname for each module
         if (GetModuleFileNameEx(process_handle, modules[i], module_name,
                                 sizeof(module_name) / sizeof(TCHAR))) {
-          fprintf(fp,"  %s\n", module_name);
+          out << "  " << module_name << "\n";
         }
       }
     }
     free(modules);
   } else {
-    fprintf(fp, "No library information available\n");
+    out << "No library information available\n";
   }
   // Release the handle to the process.
   CloseHandle(process_handle);
