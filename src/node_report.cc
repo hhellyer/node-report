@@ -513,7 +513,7 @@ static void walkHandle(uv_handle_t* h, void* arg) {
   }
 
   snprintf(buf, sizeof(buf),
-              "[%c%c] %s\t %p\n",
+              "[%c%c]   %-10s%p\n",
               uv_has_ref(h)?'R':'-',
               uv_is_active(h)?'A':'-',
               //"I-"[!(h->flags & UV__HANDLE_INTERNAL)],
@@ -601,7 +601,7 @@ static void WriteNodeReport(Isolate* isolate, DumpEvent event, const char* messa
   out << "\n================================================================================";
   out << "\n==== Node.js libuv Handle Summary ==============================================\n";
   out << "\n(Flags: R=Ref, A=Active)\n";
-  out << "\nFlags Type     Address\n";
+  out << "\nFlags  Type      Address\n";
   uv_walk(uv_default_loop(), walkHandle, (void*)&out);
 //#endif
 
