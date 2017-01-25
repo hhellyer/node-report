@@ -516,7 +516,6 @@ static void walkHandle(uv_handle_t* h, void* arg) {
               "[%c%c]   %-10s%p\n",
               uv_has_ref(h)?'R':'-',
               uv_is_active(h)?'A':'-',
-              //"I-"[!(h->flags & UV__HANDLE_INTERNAL)],
               type.c_str(), (void*)h);
 
   *out << buf;
