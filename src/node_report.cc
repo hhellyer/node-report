@@ -24,6 +24,8 @@
 #include <process.h>
 #include <dbghelp.h>
 #include <Lm.h>
+#include <tchar.h>
+#include <psapi.h>
 #else
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -34,9 +36,13 @@
 #include <inttypes.h>
 #include <cxxabi.h>
 #include <dlfcn.h>
+#ifdef __linux__
+#include <link.h>
+#endif
 #ifndef _AIX
 #include <execinfo.h>
 #else
+#include <sys/ldr.h>
 #include <sys/procfs.h>
 #endif
 #include <sys/utsname.h>
@@ -53,6 +59,7 @@
 #ifdef __APPLE__
 // Include _NSGetArgv and _NSGetArgc for command line arguments.
 #include <crt_externs.h>
+#include <mach-o/dyld.h>
 #endif
 
 #ifndef _WIN32
@@ -66,8 +73,6 @@ using v8::HeapStatistics;
 using v8::Isolate;
 using v8::Local;
 using v8::Message;
-using v8::StackFrame;
-using v8::StackTrace;
 using v8::String;
 using v8::V8;
 
@@ -84,6 +89,7 @@ static void PrintResourceUsage(std::ostream& out);
 #endif
 static void PrintGCStatistics(std::ostream& out, Isolate* isolate);
 static void PrintSystemInformation(std::ostream& out, Isolate* isolate);
+static void PrintLoadedLibraries(std::ostream& out, Isolate* isolate);
 static void WriteInteger(std::ostream& out, size_t value);
 
 // Global variables
@@ -92,8 +98,8 @@ const char* v8_states[] = {"JS", "GC", "COMPILER", "OTHER", "EXTERNAL", "IDLE"};
 static bool report_active = false; // recursion protection
 static char report_filename[NR_MAXNAME + 1] = "";
 static char report_directory[NR_MAXPATH + 1] = ""; // defaults to current working directory
-static std::string version_string = UNKNOWN_NODEVERSION_STRING;
-static std::string commandline_string = "";
+std::string version_string = UNKNOWN_NODEVERSION_STRING;
+std::string commandline_string = "";
 #ifdef _WIN32
 static SYSTEMTIME loadtime_tm_struct; // module load time
 #else  // UNIX, OSX
@@ -135,22 +141,6 @@ unsigned int ProcessNodeReportEvents(const char* args) {
     }
   }
   return event_flags;
-}
-
-unsigned int ProcessNodeReportCoreSwitch(const char* args) {
-  if (strlen(args) == 0) {
-    std::cerr << "Missing argument for nodereport core switch option\n";
-  } else {
-    // Parse the supplied switch
-    if (!strncmp(args, "yes", sizeof("yes") - 1) || !strncmp(args, "true", sizeof("true") - 1)) {
-      return 1;
-    } else if (!strncmp(args, "no", sizeof("no") - 1) || !strncmp(args, "false", sizeof("false") - 1)) {
-      return 0;
-    } else {
-      std::cerr << "Unrecognised argument for nodereport core switch option: " << args << "\n";
-    }
-  }
-  return 1;  // Default is to produce core dumps
 }
 
 unsigned int ProcessNodeReportSignal(const char* args) {
@@ -497,26 +487,17 @@ void GetNodeReport(Isolate* isolate, DumpEvent event, const char* message, const
   WriteNodeReport(isolate, event, message, location, nullptr, out, &tm_struct);
 }
 
-#ifndef _WIN32
-enum {
-  UV__HANDLE_INTERNAL = 0x8000,
-  UV__HANDLE_ACTIVE   = 0x4000,
-  UV__HANDLE_REF      = 0x2000,
-  UV__HANDLE_CLOSING  = 0 /* no-op on unix */
-};
-#else
-# define UV__HANDLE_INTERNAL  0x80
-# define UV__HANDLE_ACTIVE    0x40
-# define UV__HANDLE_REF       0x20
-# define UV__HANDLE_CLOSING   0x01
-#endif
-
 static void walkHandle(uv_handle_t* h, void* arg) {
   std::string type;
   std::string data = "";
+  std::ostream* out = (std::ostream*)arg;
+  char buf[64];
   uv_any_handle* handle = (uv_any_handle*)h;
 
+  // List all the types so we get a compile warning if we've missed one,
+  // (using default: supresses the compiler warning.)
   switch (h->type) {
+    case UV_UNKNOWN_HANDLE: type = "unknown"; break;
     case UV_ASYNC: type = "async"; break;
     case UV_CHECK: type = "check"; break;
     case UV_FS_EVENT: type = "fs_event"; break;
@@ -583,8 +564,8 @@ static void walkHandle(uv_handle_t* h, void* arg) {
       type = "signal";
       data = "signum: " + std::to_string(handle->signal.signum);
       break;
-    default:
-      break;
+    case UV_FILE: type = "file"; break;
+    case UV_HANDLE_TYPE_MAX : type = "max"; break;
   }
 
   if( h->type == UV_TCP || h->type == UV_UDP
@@ -622,21 +603,20 @@ static void walkHandle(uv_handle_t* h, void* arg) {
 #endif
   }
 
+  snprintf(buf, sizeof(buf),
+              "[%c%c]   %-10s0x%p\n",
+              uv_has_ref(h)?'R':'-',
+              uv_is_active(h)?'A':'-',
+              type.c_str(), (void*)h);
 
-
-  fprintf(stderr,
-              "[%c%c%c] %s\t %p %s\n",
-              "R-"[!(h->flags & UV__HANDLE_REF)],
-              "A-"[!(h->flags & UV__HANDLE_ACTIVE)],
-              "I-"[!(h->flags & UV__HANDLE_INTERNAL)], type.c_str(),
-              (void*)h, data.c_str());
+  *out << buf << " " << data;
 }
 
 
 static void WriteNodeReport(Isolate* isolate, DumpEvent event, const char* message, const char* location, char* filename, std::ostream &out, void* time) {
 
 #ifdef _WIN32
-  SYSTEMTIME tm_struct = (SYSTEMTIME*)time;
+  SYSTEMTIME tm_struct = *(SYSTEMTIME*)time;
   DWORD pid = GetCurrentProcessId();
 #else  // UNIX, OSX
   struct tm tm_struct = *(tm*)time;
@@ -707,29 +687,13 @@ static void WriteNodeReport(Isolate* isolate, DumpEvent event, const char* messa
   // Note: documentation of the uv_print_all_handles() API says "This function
   // is meant for ad hoc debugging, there is no API/ABI stability guarantee"
   // http://docs.libuv.org/en/v1.x/misc.html
-#ifndef _WIN32
+//#ifndef _WIN32
   out << "\n================================================================================";
   out << "\n==== Node.js libuv Handle Summary ==============================================\n";
-  out << "\n(Flags: R=Ref, A=Active, I=Internal)\n";
-  out << "\nFlags Type     Address\n";
-
-  /* uv_print_all_handles insists on a FILE*, we can't pass it
-   * a stream.
-   */
-  std::FILE *handles_fp = std::tmpfile();
-  if( handles_fp != nullptr ) {
-    char handles_buf[64];
-    uv_print_all_handles(nullptr, handles_fp);
-    std::fflush(handles_fp);
-    std::rewind(handles_fp);
-    while( std::fgets(handles_buf, sizeof(handles_buf), handles_fp) != nullptr ) {
-      out << handles_buf;
-    }
-    // Calling close on a file from tmpfile *should* delete it.
-    std::fclose(handles_fp);
-  }
-  out << std::flush;
-#endif
+  out << "\n(Flags: R=Ref, A=Active)\n";
+  out << "\nFlags  Type      Address\n";
+  uv_walk(uv_default_loop(), walkHandle, (void*)&out);
+//#endif
 
   uv_walk(uv_default_loop(), walkHandle, nullptr);
 
@@ -815,10 +779,10 @@ static void PrintVersionInformation(std::ostream& out) {
       out <<  "\nOS version: " << os_name << "\n";
 
       if (os_info->sv101_comment != NULL) {
-        out << "\nMachine: %ls %ls\n", os_info->sv101_name,
-                os_info->sv101_comment);
+        out << "\nMachine: " << os_info->sv101_name << " " <<  os_info->sv101_comment << "\n";
+
       } else {
-        out << "\nMachine: %ls\n", os_info->sv101_name);
+        out << "\nMachine: " << os_info->sv101_name << "\n";
       }
       if (os_info != NULL) {
         NetApiBufferFree(os_info);
@@ -826,9 +790,9 @@ static void PrintVersionInformation(std::ostream& out) {
     } else {
       TCHAR machine_name[256];
       DWORD machine_name_size = 256;
-      out << "\nOS version: Windows\n");
+      out << "\nOS version: Windows\n";
       if (GetComputerName(machine_name, &machine_name_size)) {
-        out << "\nMachine: " << " << %s << " << "\n", machine_name);
+        out << "\nMachine: " << machine_name << "\n";
       }
     }
   }
@@ -857,7 +821,7 @@ static void PrintJavaScriptStack(std::ostream& out, Isolate* isolate, DumpEvent 
   switch (event) {
   case kFatalError:
     // Stack trace on fatal error not supported on Windows
-    out << "No stack trace available\n");
+    out << "No stack trace available\n";
     break;
   default:
     // All other events, print the stack using StackTrace::StackTrace() and GetStackSample() APIs
@@ -989,6 +953,7 @@ void PrintNativeStack(std::ostream& out) {
   HANDLE hProcess = GetCurrentProcess();
   SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
   SymInitialize(hProcess, nullptr, TRUE);
+  char buf[64];
 
   WORD numberOfFrames = CaptureStackBackTrace(2, 64, frames, nullptr);
 
@@ -1006,16 +971,19 @@ void PrintNativeStack(std::ostream& out) {
       IMAGEHLP_LINE64 line;
       line.SizeOfStruct = sizeof(line);
       if (SymGetLineFromAddr64(hProcess, dwAddress, &dwOffset, &line)) {
-        out << "%2d: [pc=0x%p] " << %s << " [+%d] in " << %s << ": line: %lu\n", i,
-          reinterpret_cast<void*>(pSymbol->Address), pSymbol->Name,
-          dwOffset, line.FileName, line.LineNumber);
+        snprintf(buf, sizeof(buf), "%2d: [pc=0x%p] %s [+%d] in %s: line: %lu\n", i,
+                  reinterpret_cast<void*>(pSymbol->Address), pSymbol->Name,
+                  dwOffset, line.FileName, line.LineNumber);
+        out << buf;
       } else {
-        out << "%2d: [pc=0x%p] " << %s << " [+%lld]\n", i,
-          reinterpret_cast<void*>(pSymbol->Address), pSymbol->Name,
-          dwOffset64);
+        snprintf(buf, sizeof(buf), "%2d: [pc=0x%p] %s [+%lld]\n", i,
+                  reinterpret_cast<void*>(pSymbol->Address), pSymbol->Name,
+                  dwOffset64);
+        out << buf;
       }
     } else { // SymFromAddr() failed, just print the address
-      out << "%2d: [pc=0x%p]\n", i, reinterpret_cast<void*>(dwAddress) ;
+      snprintf(buf, sizeof(buf), "%2d: [pc=0x%p]\n", i, reinterpret_cast<void*>(dwAddress));
+      out << buf;
     }
   }
 }
@@ -1157,7 +1125,7 @@ static void PrintResourceUsage(std::ostream& out) {
 #if defined(__APPLE__) || defined(_AIX)
     snprintf( buf, sizeof(buf), "%ld.%06d", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
     out << "\n  User mode CPU: " << buf << " secs";
-    snprintf( buf, sizeof(buf), "%ld.%06d", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec;
+    snprintf( buf, sizeof(buf), "%ld.%06d", stats.ru_stime.tv_sec, stats.ru_stime.tv_usec);
     out << "\n  Kernel mode CPU: " << buf << " secs";
 #else
     snprintf( buf, sizeof(buf), "%ld.%06ld", stats.ru_utime.tv_sec, stats.ru_utime.tv_usec);
@@ -1181,7 +1149,7 @@ static void PrintSystemInformation(std::ostream& out, Isolate* isolate) {
   out << "\n==== System Information ========================================================\n";
 
 #ifdef _WIN32
-  out << "\nEnvironment variables\n");
+  out << "\nEnvironment variables\n";
   LPTSTR lpszVariable;
   LPTCH lpvEnv;
 
@@ -1191,7 +1159,7 @@ static void PrintSystemInformation(std::ostream& out, Isolate* isolate) {
     // Variable strings are separated by null bytes, and the block is terminated by a null byte.
     lpszVariable = reinterpret_cast<LPTSTR>(lpvEnv);
     while (*lpszVariable) {
-      out << "  " << %s << "\n", lpszVariable);
+      out << "  " << lpszVariable << "\n", lpszVariable;
       lpszVariable += lstrlen(lpszVariable) + 1;
     }
     FreeEnvironmentStrings(lpvEnv);
@@ -1255,6 +1223,108 @@ const static struct {
       }
     }
   }
+#endif
+
+  out << "\nLoaded libraries\n";
+  PrintLoadedLibraries(out, isolate);
+}
+
+/*******************************************************************************
+ * Functions to print a list of loaded native libraries.
+ *
+ ******************************************************************************/
+#ifdef __linux__
+static int LibraryPrintCallback(struct dl_phdr_info *info, size_t size, void *data) {
+  std::ostream* out = (std::ostream*)data;
+  if (info->dlpi_name != nullptr && *info->dlpi_name != '\0') {
+    *out << "  " << info->dlpi_name << "\n";
+  }
+  return 0;
+}
+#endif
+
+static void PrintLoadedLibraries(std::ostream& out, Isolate* isolate) {
+#ifdef __linux__
+  dl_iterate_phdr(LibraryPrintCallback, &out);
+#elif __APPLE__
+  int i = 0;
+  const char *name = _dyld_get_image_name(i);
+  while (name != nullptr) {
+    out << "  " << name << "\n";
+    i++;
+    name = _dyld_get_image_name(i);
+  }
+#elif _AIX
+  // We can't tell in advance how large the buffer needs to be.
+  // Retry until we reach too large a size (1Mb).
+  const unsigned int buffer_inc = 4096;
+  unsigned int buffer_size = buffer_inc;
+  char* buffer = (char*) malloc(buffer_size);
+  int rc = -1;
+  while (buffer != nullptr && rc != 0 && buffer_size < 1024 * 1024) {
+    rc = loadquery(L_GETINFO, buffer, buffer_size);
+    if (rc == 0) {
+      break;
+    }
+    free(buffer);
+    buffer_size += buffer_inc;
+    buffer = (char*) malloc(buffer_size);
+  }
+  if (buffer == nullptr) {
+    return; // Don't try to free the buffer.
+  }
+  if (rc == 0) {
+    char* buf = buffer;
+    ld_info* cur_info = nullptr;
+    do {
+      cur_info = (ld_info*) buf;
+      char* member_name = cur_info->ldinfo_filename
+        + strlen(cur_info->ldinfo_filename) + 1;
+      if (*member_name != '\0') {
+        out << "  " << cur_info->ldinfo_filename << "(" << member_name << ")\n";
+      } else {
+        out << "  " << cur_info->ldinfo_filename << "\n";
+      }
+      buf += cur_info->ldinfo_next;
+    } while (cur_info->ldinfo_next != 0);
+  }
+  free(buffer);
+
+#elif _WIN32
+  // Windows implementation - get a handle to the process.
+  HANDLE process_handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
+                                      FALSE, GetCurrentProcessId());
+  if (process_handle == NULL) {
+    out << "No library information available\n";
+    return;
+  }
+  // Get a list of all the modules in this process
+  DWORD size_1 = 0, size_2 = 0;
+  // First call to get the size of module array needed
+  if (EnumProcessModules(process_handle, NULL, 0, &size_1)) {
+    HMODULE* modules = (HMODULE*) malloc(size_1);
+    if (modules == NULL) {
+      return;  // bail out if malloc failed
+    }
+    // Second call to populate the module array
+    if (EnumProcessModules(process_handle, modules, size_1, &size_2)) {
+      for (int i = 0;
+           i < (size_1 / sizeof(HMODULE)) && i < (size_2 / sizeof(HMODULE));
+           i++) {
+        TCHAR module_name[MAX_PATH];
+        // Obtain and print the full pathname for each module
+        if (GetModuleFileNameEx(process_handle, modules[i], module_name,
+                                sizeof(module_name) / sizeof(TCHAR))) {
+          out << "  " << module_name << "\n";
+        }
+      }
+    }
+    free(modules);
+  } else {
+    out << "No library information available\n";
+  }
+  // Release the handle to the process.
+  CloseHandle(process_handle);
 #endif
 }
 

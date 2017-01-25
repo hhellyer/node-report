@@ -20,6 +20,8 @@ using v8::Object;
 using v8::Number;
 using v8::String;
 using v8::Value;
+using v8::StackTrace;
+using v8::StackFrame;
 
 // Bit-flags for NodeReport trigger options
 #define NR_EXCEPTION  0x01
@@ -37,7 +39,6 @@ void TriggerNodeReport(Isolate* isolate, DumpEvent event, const char* message, c
 void GetNodeReport(Isolate* isolate, DumpEvent event, const char* message, const char* location, std::ostream& out);
 
 unsigned int ProcessNodeReportEvents(const char* args);
-unsigned int ProcessNodeReportCoreSwitch(const char* args);
 unsigned int ProcessNodeReportSignal(const char* args);
 void ProcessNodeReportFileName(const char* args);
 void ProcessNodeReportDirectory(const char* args);
