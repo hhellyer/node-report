@@ -535,34 +535,11 @@ static void walkHandle(uv_handle_t* h, void* arg) {
       type = "timer";
       data = "Repeat: " + std::to_string(uv_timer_get_repeat(&(handle->timer)));
       break;
-    case UV_TTY: {
-      type = "tty";
-//      uv_os_fd_t fd_v;
-//      uv_os_fd_t* fd = &fd_v;
-//      int rc  = uv_fileno(h, fd);
-//      // uv_os_fd_t is an int on Unix and HANDLE on Windows.
-//#ifndef _WIN32
-//      if( rc == 0 ) {
-//        switch (fd_v) {
-//        case 0:
-//          data = "stdin";
-//        case 1:
-//          data = "stdout";
-//        case 2:
-//          data = "stderr";
-//        default:
-//          data = "file descriptor: " + std::to_string((int)fd_v);
-//          break;
-//        }
-//       //printf("stdin is %d, stdout is %d, stderr is %d\n", fileno(stdin), fileno(stdout), fileno(stderr));
-//      }
-//#endif
-      break;
-    }
+    case UV_TTY: type = "tty"; break;
     case UV_UDP: type = "udp"; break;
     case UV_SIGNAL:
       type = "signal";
-      data = "signum: " + std::to_string(handle->signal.signum);
+      data = "signum: " + std::to_string(handle->signal.signum) + "(" + node::signo_string(handle->signal.signum) + ")";
       break;
     case UV_FILE: type = "file"; break;
     case UV_HANDLE_TYPE_MAX : type = "max"; break;
@@ -603,13 +580,18 @@ static void walkHandle(uv_handle_t* h, void* arg) {
 #endif
   }
 
+  if( h->type == UV_TCP || h->type == UV_NAMED_PIPE || h->type == UV_TTY ) {
+
+    data += " write queue size " + std::to_string(handle->stream.write_queue_size);
+
+  }
   snprintf(buf, sizeof(buf),
-              "[%c%c]   %-10s0x%p\n",
+              "[%c%c]   %-10s0x%p",
               uv_has_ref(h)?'R':'-',
               uv_is_active(h)?'A':'-',
               type.c_str(), (void*)h);
 
-  *out << buf << " " << data;
+  *out << buf << " " << data << "\n";
 }
 
 
@@ -683,19 +665,12 @@ static void WriteNodeReport(Isolate* isolate, DumpEvent event, const char* messa
   out << std::flush;
 #endif
 
-  // Print libuv handle summary (TODO: investigate failure on Windows)
-  // Note: documentation of the uv_print_all_handles() API says "This function
-  // is meant for ad hoc debugging, there is no API/ABI stability guarantee"
-  // http://docs.libuv.org/en/v1.x/misc.html
-//#ifndef _WIN32
+  // Print libuv handle summary.
   out << "\n================================================================================";
   out << "\n==== Node.js libuv Handle Summary ==============================================\n";
   out << "\n(Flags: R=Ref, A=Active)\n";
   out << "\nFlags  Type      Address\n";
   uv_walk(uv_default_loop(), walkHandle, (void*)&out);
-//#endif
-
-  uv_walk(uv_default_loop(), walkHandle, nullptr);
 
   // Print operating system information
   PrintSystemInformation(out, isolate);
