@@ -536,10 +536,12 @@ static void walkHandle(uv_handle_t* h, void* arg) {
       break;
     case UV_TTY: type = "tty"; break;
     case UV_UDP: type = "udp"; break;
-    case UV_SIGNAL:
+    case UV_SIGNAL: {
+      // See http://docs.libuv.org/en/v1.x/signal.html - SIGWINCH is used by libuv so always appears.
       type = "signal";
       data = "signum: " + std::to_string(handle->signal.signum) + "(" + node::signo_string(handle->signal.signum) + ")";
       break;
+    }
     case UV_FILE: type = "file"; break;
     case UV_HANDLE_TYPE_MAX : type = "max"; break;
   }
@@ -549,6 +551,7 @@ static void walkHandle(uv_handle_t* h, void* arg) {
       || h->type == UV_NAMED_PIPE
 #endif
       ) {
+    // These *must* be 0 or libuv will set the buffer sizes to the non-zero values they contain.
     int send_size = 0;
     int recv_size = 0;
     uv_send_buffer_size(h, &send_size);
@@ -581,7 +584,8 @@ static void walkHandle(uv_handle_t* h, void* arg) {
 
   if( h->type == UV_TCP || h->type == UV_NAMED_PIPE || h->type == UV_TTY ) {
 
-    data += " write queue size " + std::to_string(handle->stream.write_queue_size);
+    data += " write queue size " + std::to_string(handle->stream.write_queue_size) + " ";
+    data += (uv_is_readable(&handle->stream)?std::string(" readable "):std::string()) + (uv_is_writable(&handle->stream)?std::string(" writable "):std::string());
 
   }
   snprintf(buf, sizeof(buf),
