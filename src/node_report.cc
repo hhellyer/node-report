@@ -512,23 +512,22 @@ static void walkHandle(uv_handle_t* h, void* arg) {
     case UV_TCP: {
       struct sockaddr_storage addr_storage;
       struct sockaddr* addr = (sockaddr*)&addr_storage;
-      char hostbuf[64];
-      char servbuf[64];
+      char hostbuf[NI_MAXHOST];
+      char portbuf[NI_MAXSERV];
       int addr_size = sizeof(addr);
       int rc = 0;
       type = "tcp";
-//      std::string sockname(addr->sa_data);
-//      uv_tcp_getpeername(&(handle->tcp), addr, &addr_size);
-//      std::string peername(addr->sa_data);
-//      printf("%s\n", addr->sa_data);
+
+      // TODO - I think this is right but it would be better to use the uv_ functions.
       rc = uv_tcp_getsockname(&(handle->tcp), addr, &addr_size);
-      rc = getnameinfo(addr, addr_size, hostbuf, sizeof(hostbuf), servbuf, sizeof(servbuf), 0);
-      uv_ip4_name((struct sockaddr_in *)addr, hostbuf, sizeof(hostbuf)); // TODO - should use inet_ntop to get port and IP.
-      data += std::string(hostbuf)+ ":" + std::string(servbuf) + " -> ";
+      // getnameinfo will format host and port and handle ipv4/ipv6.
+      rc = getnameinfo(addr, addr_size, hostbuf, sizeof(hostbuf), portbuf, sizeof(portbuf), 0);
+      data += std::string(hostbuf)+ ":" + std::string(portbuf) + " ";
+
+      // Get the remote end of the connection.
       rc = uv_tcp_getpeername(&(handle->tcp), addr, &addr_size);
-      rc = getnameinfo(addr, addr_size, hostbuf, sizeof(hostbuf), servbuf, sizeof(servbuf), 0);
-      uv_ip4_name((struct sockaddr_in *)addr, hostbuf, sizeof(hostbuf));
-      data += std::string(hostbuf)+ ":" + std::string(servbuf) + " ";
+      rc = getnameinfo(addr, addr_size, hostbuf, sizeof(hostbuf), portbuf, sizeof(portbuf), 0);
+      data += std::string(hostbuf)+ ":" + std::string(portbuf) + " ";
       break;
     }
     case UV_TIMER:
